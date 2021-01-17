@@ -8,7 +8,7 @@ def lorenz_obs_operator(state):
     return [x, y, z]
 
 
-def assimilateLorenz(initial, observations, lorenz_step, error_vector=None, verbose=False,
+def assimilate_lorenz(initial, observations, lorenz_step, error_vector=None, verbose=True,
                      maximum_number_of_steps=100):
     def lorenz_evol_step(state):
         list(np.ravel(state))
@@ -32,9 +32,6 @@ def assimilateLorenz(initial, observations, lorenz_step, error_vector=None, verb
         Algorithm='4DVAR',
         Parameters={
             'StoreSupplementaryCalculations': [
-                # 'Analysis', 'BMA', 'CostFunctionJ', 'CostFunctionJAtCurrentOptimum',
-                # 'CostFunctionJb', 'CostFunctionJbAtCurrentOptimum', 'CostFunctionJo',
-                # 'CostFunctionJoAtCurrentOptimum', 'CurrentOptimum', 'CurrentState', 'IndexOfOptimum'
                 'CurrentState'
             ],
             'MaximumNumberOfSteps': maximum_number_of_steps
@@ -42,9 +39,6 @@ def assimilateLorenz(initial, observations, lorenz_step, error_vector=None, verb
     )
     if verbose:
         calculations = [
-            # 'Analysis', 'BMA', 'CostFunctionJ', 'CostFunctionJAtCurrentOptimum', 'CostFunctionJb',
-            # 'CostFunctionJbAtCurrentOptimum', 'CostFunctionJo', 'CostFunctionJoAtCurrentOptimum',
-            # 'CurrentOptimum', 'CurrentState', 'IndexOfOptimum'
             'CurrentState'
         ]
         for calculation in calculations:
@@ -69,3 +63,41 @@ def assimilateLorenz(initial, observations, lorenz_step, error_vector=None, verb
         sigma=sigma,
         beta=beta
     )
+
+
+def assimilate_lorenz_weighted(background, observations, observation_operator, verbose=True):
+    case = adaoBuilder.New('')
+    case.setBackground(Vector=background, Stored=True)
+    # case.setBackgroundError(ScalarSparseMatrix=1.e6)
+    case.setBackgroundError(ScalarSparseMatrix=1.e4)
+    case.setObservation(Vector=observations, Stored=True)
+    # case.setObservationError(ScalarSparseMatrix=1.)
+    case.setObservationError(ScalarSparseMatrix=0.1)
+    case.setObservationOperator(OneFunction=observation_operator)
+    case.setAlgorithmParameters(
+        Algorithm='3DVAR',
+        Parameters={
+            'StoreSupplementaryCalculations': [
+                'CurrentState'
+            ],
+            'MaximumNumberOfSteps': 50
+        },
+    )
+    if verbose:
+        calculations = [
+            'CurrentState'
+        ]
+        for calculation in calculations:
+            case.setObserver(
+                Info="  Intermediate " + calculation + " at the current iteration:",
+                Template='ValuePrinter',
+                Variable=calculation,
+            )
+    case.execute()
+    print("Calibration of %i coefficients on %i measures" % (
+        len(case.get('Background')),
+        len(case.get('Observation')),
+    ))
+    print("---------------------------------------------------------------------")
+    print("Calibration resulting coefficients.:", np.ravel(case.get('Analysis')[-1]))
+    return np.ravel(case.get('Analysis')[-1])
